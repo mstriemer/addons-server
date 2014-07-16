@@ -2,14 +2,17 @@
 from django.conf import settings
 
 import mock
-from nose.tools import eq_
+from nose.tools import eq_, ok_
 import urlparse
 
 import amo
 import amo.tests
 from addons.models import Addon
+from applications.models import Application, AppVersion
 from files.utils import make_xpi
 from zadmin import tasks
+from zadmin.models import ValidationJob, ValidationResult
+
 
 def RequestMock(response='', headers={}):
     """Mocks the request objects of urllib2 and requests modules."""
@@ -183,3 +186,65 @@ class TestLangpackFetcher(amo.tests.TestCase):
         with self.assertRaises(ValueError) as exc:
             tasks.fetch_langpacks('../foo/')
         eq_(str(exc.exception), 'Invalid path')
+
+
+class TestAddValidationJobs(amo.tests.TestCase):
+    fixtures = ['base/apps', 'base/platforms', 'base/addon_3615',
+                'base/appversion', 'base/users']
+
+    def appversion(self, version, application=amo.FIREFOX.id):
+        try:
+            return AppVersion.objects.get(application=application,
+                                          version=version)
+        except:
+            return AppVersion.objects.create(application_id=application,
+                                             version=version)
+
+    def setUp(self):
+        patcher = mock.patch('zadmin.tasks.bulk_validate_file')
+        self.bulk_validate_file = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.application = Application.objects.get(pk=amo.FIREFOX.id)
+        self.version = self.appversion('5.0')
+        self.curr_max = self.appversion('4.0')
+        self.job = ValidationJob.objects.create(
+            application=self.application,
+            curr_max_version=self.curr_max,
+            target_version=self.version,
+            finish_email='nobody@mozilla.org')
+        self.addon = Addon.objects.get()
+
+    def test_regular_addons_are_bulk_validated(self):
+        ok_(not tasks.bulk_validate_file.delay.called,
+            'bulk_validate_file.delay was already called')
+        eq_(ValidationResult.objects.count(), 0, 'ValidationResults exist')
+        tasks.add_validation_jobs([self.addon.pk], self.job.pk)
+        ok_(tasks.bulk_validate_file.delay.called,
+            'bulk_validate_file.delay was not called')
+        eq_(ValidationResult.objects.count(), 1,
+            'ValidationResult is not recorded')
+        eq_(ValidationResult.objects.get().file_id,
+            self.addon.get_latest_file().id,
+            'validation is for the wrong file')
+
+    def test_binary_addons_are_not_bulk_validated(self):
+        self.addon.get_latest_file().update(binary=True)
+        ok_(not tasks.bulk_validate_file.delay.called,
+            'bulk_validate_file.delay was already called')
+        eq_(ValidationResult.objects.count(), 0, 'ValidationResults exist')
+        tasks.add_validation_jobs([self.addon.pk], self.job.pk)
+        ok_(not tasks.bulk_validate_file.delay.called,
+            'bulk_validate_file.delay was called')
+        eq_(ValidationResult.objects.count(), 0,
+            'ValidationResult was recorded')
+
+    def test_partial_binary_addons_are_not_bulk_validated(self):
+        self.addon.get_latest_file().update(binary_components=True)
+        ok_(not tasks.bulk_validate_file.delay.called,
+            'bulk_validate_file.delay was already called')
+        eq_(ValidationResult.objects.count(), 0, 'ValidationResults exist')
+        tasks.add_validation_jobs([self.addon.pk], self.job.pk)
+        ok_(not tasks.bulk_validate_file.delay.called,
+            'bulk_validate_file.delay was called')
+        eq_(ValidationResult.objects.count(), 0,
+            'ValidationResult was recorded')

@@ -162,6 +162,12 @@ def add_validation_jobs(pks, job_pk, **kw):
                         job.application.id, job.target_version))
             continue
 
+        if addon.binary or addon.binary_components:
+            log.info('Addon %s has binary components so it will not be bulk '
+                     'updated with target version of app %s %s'
+                     % (addon.pk, job.application.id, job.target_version))
+            continue
+
         try:
             public = (base.filter(files__status=amo.STATUS_PUBLIC)
                           .latest('id'))
