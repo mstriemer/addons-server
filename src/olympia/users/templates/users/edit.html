@@ -15,7 +15,7 @@ data-default-locale="{{ request.LANG|lower }}"
 {% block content %}
 {% include 'users/includes/navigation.html' %}
 <div id="user_edit" class="primary prettyform grid" role="main">
-  {% if switch_is_active('fxa-auth') and user.has_anonymous_display_name() %}
+  {% if user.has_anonymous_display_name() %}
     <div class="notification-box error anonymous">
       <h2>{{ _('Please set your display name') }}</h2>
       <p>{{ _('Please set your display name or username to complete the registration process.') }}</p>
@@ -23,7 +23,6 @@ data-default-locale="{{ request.LANG|lower }}"
   {% endif %}
   <form method="post" class="user-input island"
         enctype="multipart/form-data">
-    {% set is_fxa_user = switch_is_active('fxa-auth') and user.fxa_migrated() %}
     {{ csrf() }}
     <div id="user-edit" class="tab-wrapper">
       <div id="user-account" class="tab-panel">
@@ -43,7 +42,6 @@ data-default-locale="{{ request.LANG|lower }}"
             <li{% if form.email.errors %} class="error"{% endif %}>
               <label for="id_email">
                 {{ _('Email Address') }}
-                {% if not is_fxa_user %}{{ required() }}{% endif %}
               </label>
               {{ form.email }}
               {% if form.email.help_text %}
@@ -52,47 +50,10 @@ data-default-locale="{{ request.LANG|lower }}"
               {{ form.email.errors }}
             </li>
             <li>
-              {% if is_fxa_user %}
-                <a href="{{ manage_fxa_link() }}">
-                  {{ _('Manage Firefox Account...') }}</a>
-              {% else %}
-                <a href="#acct-password" id="change-acct-password">
-                  {{ _('Change Password') }}</a>
-              {% endif %}
+              <a href="{{ manage_fxa_link() }}">{{ _('Manage Firefox Account...') }}</a>
             </li>
           </ul>
         </fieldset>
-
-        {% if not is_fxa_user %}
-          <fieldset id="acct-password">
-            <legend>{{ _('Password') }}</legend>
-            <p class="sub_legend">
-              {% trans reset_url=url('password_reset_form') -%}
-              Change your password. If you forgot your password, you can <a href="{{ reset_url }}">use the reset form</a>.
-              {%- endtrans %}
-            </p>
-            <ol class="formfields">
-              <li>
-                <label for="id_oldpassword">{{ _('Old Password') }}</label>
-                {{ form.oldpassword }}
-                {{ form.oldpassword.errors }}
-              </li>
-              <li>
-                {% with form_user=form.instance %}{% include "users/tougher_password.html" %}{% endwith %}
-              </li>
-              <li>
-                <label for="id_password">{{ _('New Password') }}</label>
-                {{ form.password }}
-                {{ form.password.errors }}
-              </li>
-              <li>
-                <label for="id_password2">{{ _('Confirm Password') }}</label>
-                {{ form.password2 }}
-                {{ form.password2.errors }}
-              </li>
-            </ol>
-          </fieldset>
-        {% endif %}
 
         <fieldset id="profile-personal">
           <legend>{{ _('Profile') }}</legend>

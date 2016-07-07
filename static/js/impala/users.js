@@ -14,20 +14,6 @@ $(function() {
         }));
     }
 
-    // Hide change password box
-    $('#acct-password').hide();
-    $('#change-acct-password').click(_pd(function() {
-          $('#acct-password').fadeIn();
-          $('#id_oldpassword').focus();
-          $(this).closest('li').hide();
-    }));
-
-    // Show password box if there's an error in it.
-    $('#acct-password .errorlist li').exists(function() {
-        $('#acct-password').show();
-        $('#change-acct-password').closest('li').hide();
-    });
-
     // Display image inline
     var $avatar = $('.profile-photo .avatar'),
         $a = $('<a>', {'text': gettext('use original'), 'class': 'use-original delete', 'href': '#'}).hide();

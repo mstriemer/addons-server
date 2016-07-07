@@ -520,7 +520,6 @@ class TestLogin(UserViewBase):
         assert 'Log out' in r.content
 
     def test_double_login_fxa_enabled(self):
-        self.create_switch('fxa-auth', active=True)
         r = self.client.post(self.url, self.data, follow=True)
         self.assert3xx(r, migrate_path())
 
@@ -530,7 +529,6 @@ class TestLogin(UserViewBase):
         self.assert3xx(r, reverse('home'))
 
     def test_ok_redirects_fxa_enabled(self):
-        self.create_switch('fxa-auth', active=True)
         r = self.client.post(
             self.url + '?to=/de/firefox/here/', self.data, follow=True)
         self.assert3xx(r, migrate_path('/de/firefox/here/'))
@@ -540,14 +538,12 @@ class TestLogin(UserViewBase):
         self.assert3xx(r, '/de/firefox/extensions/')
 
     def test_bad_redirect_other_domain_fxa_enabled(self):
-        self.create_switch('fxa-auth', active=True)
         r = self.client.post(
             self.url + '?to=https://example.com/this/is/bad',
             self.data, follow=True)
         self.assert3xx(r, migrate_path())
 
     def test_bad_redirect_js_fxa_enabled(self):
-        self.create_switch('fxa-auth', active=True)
         r = self.client.post(
             self.url + '?to=javascript:window.alert("xss");',
             self.data, follow=True)
@@ -572,32 +568,6 @@ class TestLogin(UserViewBase):
         assert doc('nav').length == 1
         assert doc('#home').length == 1
         assert doc('#auth-nav li.login').length == 0
-
-    def test_login_ajax(self):
-        url = reverse('users.login_modal')
-        r = self.client.get(url)
-        assert r.status_code == 200
-
-        res = self.client.post(url, data=self.data)
-        assert res.status_code == 302
-
-    def test_login_ajax_error(self):
-        url = reverse('users.login_modal')
-        data = self.data
-        data['username'] = ''
-
-        res = self.client.post(url, data=self.data)
-        assert res.context['form'].errors['username'][0] == (
-            'This field is required.')
-
-    def test_login_ajax_wrong(self):
-        url = reverse('users.login_modal')
-        data = self.data
-        data['username'] = 'jeffb@mozilla.com'
-
-        res = self.client.post(url, data=self.data)
-        text = 'Please enter a correct username and password.'
-        assert res.context['form'].errors['__all__'][0].startswith(text)
 
     def test_login_no_recaptcha(self):
         res = self.client.post(self.url, data=self.data)
@@ -859,14 +829,12 @@ class TestReset(UserViewBase):
         assert 'You can no longer change your password' not in res.content
 
     def test_reset_msg_migrated_waffle_on(self):
-        self.create_switch('fxa-auth', active=True)
         self.user.update(fxa_id='123')
         res = self.client.get(reverse('users.pwreset_confirm',
                                       args=self.token))
         assert 'You can no longer change your password' in res.content
 
     def test_reset_attempt_migrated_waffle_on(self):
-        self.create_switch('fxa-auth', active=True)
         self.user.update(fxa_id='123')
         assert not self.user.check_password('password1')
         res = self.client.post(reverse('users.pwreset_confirm',
@@ -983,7 +951,6 @@ class TestRegistration(UserViewBase):
 
     def test_fxa_auth_enabled(self):
         """When FxA is enabled it should render the login page."""
-        amo.tests.create_switch('fxa-auth', active=True)
         response = self.client.get(reverse('users.register'))
         self.assertContains(response, 'Enter your email')
 
@@ -1416,10 +1383,6 @@ class TestReportAbuse(TestCase):
 class BaseTestMigrateView(TestCase):
     fixtures = ['base/users']
 
-    def setUp(self):
-        super(BaseTestMigrateView, self).setUp()
-        self.create_switch('fxa-auth', active=True)
-
     def login(self):
         username = 'regular@mozilla.com'
         self.client.login(username=username, password='password')
@@ -1432,9 +1395,6 @@ class BaseTestMigrateView(TestCase):
 class TestMigrateViewUnauthenticated(BaseTestMigrateView):
 
     def test_404_without_waffle(self):
-        switch = Switch.objects.get(name='fxa-auth')
-        switch.active = False
-        switch.save()
         response = self.client.get(migrate_path())
         assert response.status_code == 404
 

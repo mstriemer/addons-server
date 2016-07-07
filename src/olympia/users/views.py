@@ -304,12 +304,6 @@ def _clean_next_url(request):
 
 
 @anonymous_csrf
-@mobile_template('users/{mobile/}login_modal.html')
-def login_modal(request, template=None):
-    return _login(request, template=template)
-
-
-@anonymous_csrf
 @mobile_template('users/{mobile/}login.html')
 def login(request, template=None):
     return _login(request, template=template)
@@ -326,9 +320,6 @@ def _login(request, template=None, data=None, dont_redirect=False):
     if request.user.is_authenticated():
         return http.HttpResponseRedirect(
             request.GET.get('to', settings.LOGIN_REDIRECT_URL))
-
-    data['login_source_form'] = (waffle.switch_is_active('fxa-auth') and
-                                 not request.POST)
 
     limited = getattr(request, 'limited', 'recaptcha_shown' in request.POST)
     user = None
@@ -360,10 +351,9 @@ def _login(request, template=None, data=None, dont_redirect=False):
         request.GET = get_copy
         request = _clean_next_url(request)
         next_path = request.GET['to']
-        if waffle.switch_is_active('fxa-auth'):
-            if next_path == '/':
-                next_path = None
-            next_path = urlparams(reverse('users.migrate'), to=next_path)
+        if next_path == '/':
+            next_path = None
+        next_path = urlparams(reverse('users.migrate'), to=next_path)
         r = http.HttpResponseRedirect(next_path)
 
         # Succsesful log in according to django.  Now we do our checks.  I do
@@ -533,65 +523,7 @@ def themes(request, user, category=None):
 
 @anonymous_csrf
 def register(request):
-    if waffle.switch_is_active('fxa-auth'):
-        return login(request)
-
-    if request.user.is_authenticated():
-        messages.info(request, _('You are already logged in to an account.'))
-        form = None
-
-    elif request.method == 'POST':
-
-        form = forms.UserRegisterForm(request.POST)
-        mkt_user = UserProfile.objects.filter(email=form.data['email'],
-                                              password='')
-        if form.is_valid():
-            try:
-                u = form.save(commit=False)
-                u.set_password(form.cleaned_data['password'])
-                u.generate_confirmationcode()
-                u.lang = request.LANG
-                u.save()
-                log.info(u'Registered new account for user (%s)', u)
-
-                u.email_confirmation_code()
-
-                msg = _('Congratulations! Your user account was '
-                        'successfully created.')
-                messages.success(request, msg)
-
-                msg = _(u'An email has been sent to your address {0} to '
-                        'confirm your account. Before you can log in, you '
-                        'have to activate your account by clicking on the '
-                        'link provided in this email.').format(u.email)
-                messages.info(request, _('Confirmation Email Sent'), msg)
-
-            except IntegrityError, e:
-                # I was unable to reproduce this, but I suspect it happens
-                # when they POST twice quickly and the slaves don't have the
-                # new info yet (total guess).  Anyway, I'm assuming the
-                # first one worked properly, so this is still a success
-                # case to the end user so we just log it...
-                log.error('Failed to register new user (%s): %s' % (u, e))
-
-            return http.HttpResponseRedirect(reverse('users.login'))
-
-        elif mkt_user.exists():
-            f = PasswordResetForm()
-            f.users_cache = [mkt_user[0]]
-            f.save(use_https=request.is_secure(),
-                   email_template_name='users/email/pwreset.ltxt',
-                   request=request)
-            return render(request, 'users/newpw_sent.html', {})
-        else:
-            messages.error(request, _('There are errors in this form'),
-                           _('Please correct them and resubmit.'))
-    else:
-        form = forms.UserRegisterForm()
-
-    reg_action = reverse('users.register')
-    return render(request, 'users/register.html',
-                  {'form': form, 'register_action': reg_action})
+    return login(request)
 
 
 @anonymous_csrf_exempt
